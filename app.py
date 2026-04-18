@@ -3,6 +3,14 @@ import agent as Agent
 import utils as Utils
 import embed
 import os as OS
+from dotenv import load_dotenv
+
+# This is the crucial line you might be missing!
+load_dotenv() 
+
+# Now fetch the key
+groq_key = OS.getenv("GROQ_API_KEY")
+
 
 def create_chat(id: str):
     chat = ST.container()
@@ -15,12 +23,11 @@ def create_chat(id: str):
     for message in ST.session_state.messages:
         if message['id'] == id:
             chat.chat_message(message['role']).write(message['content'])
-    
-    ST.session_state.newschat = Agent.NewsChat(id)
- 
-    # Accept user input
-    if prompt := ST.chat_input(placeholder = "Ask me about AI legal stuff in the EU", key = id):
 
+    ST.session_state.newschat = Agent.NewsChat(id)
+
+    # Accept user input
+    if prompt := ST.chat_input(placeholder="Ask me about AI legal stuff in the EU", key=id):
         chat.chat_message("user").write(prompt)
         with ST.spinner('Wait for it...'):
             assistant_response = ST.session_state.newschat.ask(prompt)
@@ -28,6 +35,7 @@ def create_chat(id: str):
 
         ST.session_state.messages.append({"id": id, "role": "user", "content": prompt})
         ST.session_state.messages.append({"id": id, "role": "assistant", "content": assistant_response})
+
 
 if __name__ == "__main__":
     if not OS.path.exists(Utils.DB_FOLDER):

@@ -1,25 +1,90 @@
 # Legal AI
-A chatbot to help you navigate through the complicated paths of the AI regulations inside EU
+A chatbot to help you navigate through the complicated paths of AI regulations inside the EU.
 
 Technically it is a RAG system implementation, using:
-- LLM - ChatGPT 4.o
-- VectorDB - ChromaDB
-- Embedding functions - OpenAI
-- Agents - LangChain 
+- **LLM** - Llama 3 8B via Groq (free tier)
+- **VectorDB** - ChromaDB
+- **Embedding** - HuggingFace `all-MiniLM-L6-v2` (free, runs locally)
+- **Orchestration** - LangChain
 
-It demonstrates how efficient this type of system could be for big documents as a context and how smart the LLM is on understanding legal terms.
+For this demo, the context is the **Artificial Intelligence Act**, adopted by the EU Parliament on 13 March 2024.
 
-For the purpose of this demo, the context is The Artificial Intelligence Act, document adopted by EU Parliament on 13 March 2024. The system could be easily extended to many other legal papers. 
+---
 
-### Installing
-After cloning the repository the OpenAI key needs to be added as an environmental variable with the name OPENAI_API_KEY.
+## Setup & Run
+
+### 1. Prerequisites
+- Python 3.10 or 3.11 recommended (Python 3.13 may have compatibility issues with some packages)
+- A free Groq API key from https://console.groq.com
+
+### 2. Clone / Download the project
+Place all files in a folder, e.g. `legalai/`
+
+### 3. Create a virtual environment (strongly recommended)
 ```bash
-export OPENAI_API_KEY=your_key_value_here
-```
-After that it should be all fine. To run it localy, in the app folder use:
-```bash
-streamlit run app.py
+cd legalai
+python -m venv venv
+
+# Activate on Windows:
+venv\Scripts\activate
+
+# Activate on Mac/Linux:
+source venv/bin/activate
 ```
 
-### Demo
+### 4. Install dependencies
+```bash
+pip install -r requirements.txt
+```
+
+> If you get errors about `torch` or `sentence-transformers`, run:
+> ```bash
+> pip install sentence-transformers
+> ```
+
+### 5. Set your Groq API key
+
+**Windows (PowerShell):**
+```powershell
+$env:GROQ_API_KEY="your_key_here"
+```
+
+**Windows (Command Prompt):**
+```cmd
+set GROQ_API_KEY=your_key_here
+```
+
+**Mac/Linux:**
+```bash
+export GROQ_API_KEY=your_key_here
+```
+
+Or create a `.env` file in the project folder:
+```
+GROQ_API_KEY=your_key_here
+```
+
+### 6. Run the app
+```bash
+python -m streamlit run app.py
+```
+
+The first run will automatically download the EU AI Act PDF and build the ChromaDB vector store (this takes 1-2 minutes). Subsequent runs will be instant.
+
+---
+
+## Troubleshooting
+
+**`ModuleNotFoundError: No module named 'langchain.chains'`**
+Run `pip install -r requirements.txt` again with the updated requirements file — versions are now pinned to compatible releases.
+
+**`ModuleNotFoundError: No module named 'langchain_core.retrievers'`**
+Make sure `langchain-core>=0.3.0` is installed: `pip install langchain-core==0.3.58`
+
+**Slow first startup**
+Normal — it's downloading the HuggingFace embedding model (~80MB) and the EU AI Act PDF, then building the vector index.
+
+---
+
+## Demo
 https://huggingface.co/spaces/firica/legalai

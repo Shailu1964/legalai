@@ -7,6 +7,7 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain.schema import Document
 
+
 def pdf_to_text(url):
     """Downloads a PDF from a URL and extracts its text."""
     try:
@@ -21,6 +22,7 @@ def pdf_to_text(url):
     except Exception as e:
         print(f"An error occurred during PDF conversion: {e}")
         return ""
+
 
 def split_text_into_sections(text, min_chars_per_section):
     """Splits raw text into manageable chunks for the vector database."""
@@ -45,47 +47,46 @@ def split_text_into_sections(text, min_chars_per_section):
 
     return sections
 
+
 def embed_text_in_chromadb(text, document_name, document_description, persist_directory=Utils.DB_FOLDER):
     """
     Creates embeddings using a free HuggingFace model and stores them in ChromaDB.
-    Replaces the previous OpenAI implementation.
     """
     # 1. Initialize Free Local Embeddings
-    # 'all-MiniLM-L6-v2' is fast, lightweight, and free.
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-    
+
     # 2. Prepare Chunks
     raw_sections = split_text_into_sections(text, 1000)
-    
+
     # 3. Convert strings to LangChain Document objects
     documents = [
         Document(
-            page_content=section, 
+            page_content=section,
             metadata={"name": document_name, "description": document_description}
-        ) 
+        )
         for section in raw_sections
     ]
 
     print(f"Generating embeddings for {len(documents)} chunks...")
 
     # 4. Initialize and Populate ChromaDB
-    # This uses the LangChain wrapper which simplifies the collection logic.
     vectorstore = Chroma.from_documents(
         documents=documents,
         embedding=embeddings,
         persist_directory=persist_directory,
         collection_name='collection_1'
     )
-    
+
     print(f"Successfully added documents to {persist_directory}")
+
 
 if __name__ == "__main__":
     document_name = "Artificial Intelligence Act"
     document_description = "Artificial Intelligence Act"
-    
+
     print(f"Downloading and parsing: {Utils.EUROPEAN_ACT_URL}")
     text = pdf_to_text(Utils.EUROPEAN_ACT_URL)
-    
+
     if text:
         embed_text_in_chromadb(text, document_name, document_description)
     else:
