@@ -1,0 +1,9 @@
+# Secrets
+.env
+
+# Python Cache
+__pycache__/
+*.pyc
+
+# Local Database
+chroma_storage/

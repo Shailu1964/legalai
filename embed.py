@@ -3,10 +3,12 @@ import os as OS
 from tqdm import tqdm
 import requests
 import fitz  # PyMuPDF
-from chromadb.utils import embedding_functions
-import chromadb
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_chroma import Chroma
+from langchain.schema import Document
 
 def pdf_to_text(url):
+    """Downloads a PDF from a URL and extracts its text."""
     try:
         response = requests.get(url)
         pdf_data = response.content
@@ -17,10 +19,11 @@ def pdf_to_text(url):
             text += page.get_text()
         return text
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print(f"An error occurred during PDF conversion: {e}")
         return ""
 
 def split_text_into_sections(text, min_chars_per_section):
+    """Splits raw text into manageable chunks for the vector database."""
     paragraphs = text.split('\n')
     sections = []
     current_section = ""
@@ -28,61 +31,62 @@ def split_text_into_sections(text, min_chars_per_section):
 
     for paragraph in paragraphs:
         paragraph_length = len(paragraph)
-        if current_length + paragraph_length + 2 <= min_chars_per_section:  # +2 for the double newline
+        if current_length + paragraph_length + 2 <= min_chars_per_section:
             current_section += paragraph + '\n\n'
-            current_length += paragraph_length + 2  # +2 for the double newline
+            current_length += paragraph_length + 2
         else:
             if current_section:
                 sections.append(current_section.strip())
             current_section = paragraph + '\n\n'
-            current_length = paragraph_length + 2  # +2 for the double newline
+            current_length = paragraph_length + 2
 
-    if current_section:  # Add the last section
+    if current_section:
         sections.append(current_section.strip())
 
     return sections
 
 def embed_text_in_chromadb(text, document_name, document_description, persist_directory=Utils.DB_FOLDER):
-    # Generate embedding for the text using OpenAI embeddings
-    openai_ef = embedding_functions.OpenAIEmbeddingFunction(
-        api_key=OS.getenv("OPENAI_API_KEY"), model_name="text-embedding-ada-002")    
-    documents = split_text_into_sections(text, 1000)
+    """
+    Creates embeddings using a free HuggingFace model and stores them in ChromaDB.
+    Replaces the previous OpenAI implementation.
+    """
+    # 1. Initialize Free Local Embeddings
+    # 'all-MiniLM-L6-v2' is fast, lightweight, and free.
+    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     
-    ids = [str(hash(d)) for d in documents]  # Generate unique IDs for each document chunk
-
-    # Metadata for the documents
-    metadata = {
-        "name": document_name,
-        "description": document_description
-    }
-    metadatas = [metadata] * len(documents)  # Duplicate metadata for each chunk
+    # 2. Prepare Chunks
+    raw_sections = split_text_into_sections(text, 1000)
     
-    client = chromadb.PersistentClient(path=persist_directory)
-    collection_name = 'collection_1'
-    collection = client.get_or_create_collection(name=collection_name,embedding_function=openai_ef)
+    # 3. Convert strings to LangChain Document objects
+    documents = [
+        Document(
+            page_content=section, 
+            metadata={"name": document_name, "description": document_description}
+        ) 
+        for section in raw_sections
+    ]
 
-    # create ids from the current count
-    count = collection.count()
-    print(f"Collection already contains {count} documents")
-    ids = [str(i) for i in range(count, count + len(documents))]
+    print(f"Generating embeddings for {len(documents)} chunks...")
 
-    # load the documents in batches of 100
-    for i in tqdm(
-        range(0, len(documents), 100), desc="Adding documents", unit_scale=100
-    ):
-        collection.add(
-            ids=ids[i : i + 100],
-            documents=documents[i : i + 100],
-            metadatas=metadatas[i : i + 100],  # type: ignore
-        )
+    # 4. Initialize and Populate ChromaDB
+    # This uses the LangChain wrapper which simplifies the collection logic.
+    vectorstore = Chroma.from_documents(
+        documents=documents,
+        embedding=embeddings,
+        persist_directory=persist_directory,
+        collection_name='collection_1'
+    )
+    
+    print(f"Successfully added documents to {persist_directory}")
 
-    new_count = collection.count()
-    print(f"Added {new_count - count} documents")
-   
 if __name__ == "__main__":
-    # pdf_path = "TA-9-2024-0138_EN.pdf"
     document_name = "Artificial Intelligence Act"
     document_description = "Artificial Intelligence Act"
+    
+    print(f"Downloading and parsing: {Utils.EUROPEAN_ACT_URL}")
     text = pdf_to_text(Utils.EUROPEAN_ACT_URL)
-    embed_text_in_chromadb(text, document_name, document_description)
-
+    
+    if text:
+        embed_text_in_chromadb(text, document_name, document_description)
+    else:
+        print("Failed to extract text from the PDF.")

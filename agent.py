@@ -1,15 +1,13 @@
 import utils as Utils
 import os as OS
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import OpenAIEmbeddings
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain.chains import create_retrieval_chain
+from langchain_groq import ChatGroq
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.chat_history import BaseChatMessageHistory
 
 class NewsChat:
@@ -18,15 +16,30 @@ class NewsChat:
     rag_chain = None
 
     def __init__(self, article_id: str):
-        oai_key = OS.getenv("OPENAI_API_KEY")
-        embeddings = OpenAIEmbeddings(openai_api_key=oai_key)
+        # 1. Setup Free Local Embeddings (Must match the model used in embed.py)
+        # Using HuggingFace ensures you don't need an OpenAI billing account
+        embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
         self.session_id = article_id
         
-        # llm = ChatOpenAI(openai_api_key=oai_key)
-        llm = ChatOpenAI(openai_api_key=oai_key, model='gpt-4o')
-        db = Chroma(persist_directory=Utils.DB_FOLDER, embedding_function=embeddings, collection_name='collection_1')
+        # 2. Setup Groq LLM
+        # Llama-3-8b is highly capable and fits well within Groq's free tier limits
+        groq_key = OS.getenv("GROQ_API_KEY")
+        llm = ChatGroq(
+            groq_api_key=groq_key, 
+            model_name="llama3-8b-8192",
+            temperature=0
+        )
+        
+        # 3. Connect to ChromaDB
+        db = Chroma(
+            persist_directory=Utils.DB_FOLDER, 
+            embedding_function=embeddings, 
+            collection_name='collection_1'
+        )
         retriever = db.as_retriever()
 
+        # 4. Contextualize Question Logic
+        # This reformulates follow-up questions to be standalone based on history
         contextualize_q_system_prompt = """Given a chat history and the latest user question \
             which might reference context in the chat history, formulate a standalone question \
             which can be understood without the chat history. Do NOT answer the question, \
@@ -42,6 +55,7 @@ class NewsChat:
 
         history_aware_retriever = create_history_aware_retriever(llm, retriever, contextualize_q_prompt)
 
+        # 5. Question Answering Logic
         qa_system_prompt = """You are an assistant for question-answering tasks. \
             Use the following pieces of retrieved context to answer the question. \
             If you don't know the answer, just say that you don't know. \
@@ -60,6 +74,7 @@ class NewsChat:
         question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
         rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
 
+        # 6. History Management
         self.rag_chain = RunnableWithMessageHistory(
             rag_chain,
             self.get_session_history,
